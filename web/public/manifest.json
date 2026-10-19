@@ -1,7 +1,7 @@
 {
   "name": "Amiguis - La Red Social Colombiana",
   "short_name": "Amiguis",
-  "description": "La primera red social colombiana. Sin algoritmos, sin publicidad. Ves lo que eliges ver.",
+  "description": "La red social colombiana para compartir con tus amiguis.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#121417",
