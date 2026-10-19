@@ -1,0 +1,23 @@
+services:
+  postgres-test:
+    image: postgres:16-alpine
+    container_name: amiguis-postgres-test
+    environment:
+      POSTGRES_USER: amiguis
+      POSTGRES_PASSWORD: amiguis_secret_test
+      POSTGRES_DB: amiguis_test
+    ports:
+      - "5433:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U amiguis -d amiguis_test"]
+      interval: 3s
+      timeout: 3s
+      retries: 5
+
+  redis-test:
+    image: redis:7-alpine
+    container_name: amiguis-redis-test
+    ports:
+      - "6380:6379"

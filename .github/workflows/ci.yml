@@ -1,0 +1,55 @@
+name: Amiguis CI/CD Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  backend-lint-and-test:
+    name: Go Lint, Architecture Guard & Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+
+      - name: Run golangci-lint (including depguard Clean Architecture rules)
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+
+      - name: Run Unit & Chronological Feed Guardrail Tests (-race)
+        run: go test -v -race -coverprofile=coverage.out ./...
+
+      - name: Build Go Binaries (API, Worker, Migrate)
+        run: |
+          go build -o bin/api ./cmd/api
+          go build -o bin/worker ./cmd/worker
+          go build -o bin/migrate ./cmd/migrate
+
+  frontend-build:
+    name: Next.js PWA Typecheck & Build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build PWA
+        run: npm run build

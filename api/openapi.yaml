@@ -1,0 +1,1391 @@
+openapi: 3.1.0
+info:
+  title: Amiguis API
+  version: 1.0.0
+  description: |
+    The first Colombian social network API. No algorithm, no ads. People see what they choose to see.
+    Built with Clean Architecture, Go, and strict chronological feed principles.
+servers:
+  - url: http://localhost:8080/api/v1
+    description: Local development server
+paths:
+  /health/live:
+    get:
+      summary: Liveness probe
+      operationId: getLiveHealth
+      responses:
+        '200':
+          description: Service is alive
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthStatus'
+
+  /health/ready:
+    get:
+      summary: Readiness probe
+      operationId: getReadyHealth
+      responses:
+        '200':
+          description: Service is ready to receive traffic
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthStatus'
+        '503':
+          description: Service dependencies unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthStatus'
+
+  /auth/register:
+    post:
+      summary: Register a new user
+      operationId: register
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: User registered successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /auth/login:
+    post:
+      summary: Authenticate user
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/refresh:
+    post:
+      summary: Refresh JWT access token
+      operationId: refreshToken
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshRequest'
+      responses:
+        '200':
+          description: Token refreshed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/me:
+    get:
+      summary: Current authenticated user details
+      operationId: getCurrentUser
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Current user info
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CurrentUser'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/verify-email:
+    post:
+      summary: Verify user email with token
+      operationId: verifyEmail
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token:
+                  type: string
+      responses:
+        '200':
+          description: Email verified successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /privacy/export:
+    get:
+      summary: Export personal data (Ley 1581 de 2012 Habeas Data)
+      operationId: exportPersonalData
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Complete data export
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user:
+                    $ref: '#/components/schemas/CurrentUser'
+                  profile:
+                    $ref: '#/components/schemas/Profile'
+                  posts:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Post'
+                  exported_at:
+                    type: string
+                    format: date-time
+
+  /privacy/delete-account:
+    delete:
+      summary: Right to erasure (Ley 1581 de 2012 Habeas Data)
+      operationId: deleteAccount
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [confirm_password]
+              properties:
+                confirm_password:
+                  type: string
+      responses:
+        '200':
+          description: Account deleted permanently
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /profiles/{username}:
+    get:
+      summary: Retrieve profile by username
+      operationId: getProfile
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: User profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Profile'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /profiles/me:
+    put:
+      summary: Update own profile
+      operationId: updateProfile
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProfileRequest'
+      responses:
+        '200':
+          description: Profile updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Profile'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /profiles/search:
+    get:
+      summary: Search profiles by Colombian city or keyword
+      operationId: searchProfiles
+      parameters:
+        - name: q
+          in: query
+          schema:
+            type: string
+        - name: city
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Search results
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Profile'
+
+  /users/{id}/follow:
+    put:
+      summary: Follow a user
+      operationId: followUser
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Followed user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    delete:
+      summary: Unfollow a user
+      operationId: unfollowUser
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Unfollowed user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /users/{id}/block:
+    put:
+      summary: Block a user
+      operationId: blockUser
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Blocked user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+    delete:
+      summary: Unblock a user
+      operationId: unblockUser
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Unblocked user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /users/{id}/mute:
+    put:
+      summary: Mute a user (hide from feed without unfollowing)
+      operationId: muteUser
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Muted user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+    delete:
+      summary: Unmute a user
+      operationId: unmuteUser
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Unmuted user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /users/{id}/followers:
+    get:
+      summary: List followers of a user
+      operationId: getFollowers
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Followers list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Profile'
+
+  /users/{id}/following:
+    get:
+      summary: List users followed by a user
+      operationId: getFollowing
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Following list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Profile'
+
+  /posts:
+    post:
+      summary: Create a new post
+      operationId: createPost
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePostRequest'
+      responses:
+        '201':
+          description: Post created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Post'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /posts/{id}:
+    get:
+      summary: Get post by ID
+      operationId: getPost
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Post details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Post'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      summary: Delete post
+      operationId: deletePost
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Post deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /users/{id}/posts:
+    get:
+      summary: List posts by author
+      operationId: getUserPosts
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: cursor
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: User posts list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeedResponse'
+
+  /posts/{id}/reactions:
+    post:
+      summary: Add or toggle reaction to post
+      operationId: addReaction
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReactionRequest'
+      responses:
+        '200':
+          description: Reaction registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+    delete:
+      summary: Remove reaction from post
+      operationId: removeReaction
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Reaction removed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /posts/{id}/comments:
+    get:
+      summary: Get comments for a post
+      operationId: getComments
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Comments list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Comment'
+    post:
+      summary: Add comment or reply to post
+      operationId: addComment
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCommentRequest'
+      responses:
+        '201':
+          description: Comment created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Comment'
+
+  /comments/{id}:
+    delete:
+      summary: Delete comment
+      operationId: deleteComment
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Comment deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /feed:
+    get:
+      summary: Retrieve strictly chronological user feed
+      description: |
+        Guaranteed: ORDER BY created_at DESC, id DESC.
+        NO algorithm, NO ranking, NO ads.
+        Filtered only by user's explicit follows, mutes, content-type choices, and list selection.
+      operationId: getFeed
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: cursor
+          in: query
+          description: Keyset pagination cursor
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: type
+          in: query
+          description: Filter by post type (all, text, photo, video)
+          schema:
+            type: string
+            enum: [all, text, photo, video]
+            default: all
+        - name: list_id
+          in: query
+          description: Filter feed by circle/list ID
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Chronological feed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeedResponse'
+
+  /feed/preferences:
+    get:
+      summary: Get user feed filter preferences
+      operationId: getFeedPreferences
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Feed preferences
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeedPreferences'
+    put:
+      summary: Update user feed filter preferences
+      operationId: updateFeedPreferences
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FeedPreferences'
+      responses:
+        '200':
+          description: Updated feed preferences
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeedPreferences'
+
+  /feed/lists:
+    get:
+      summary: List user custom circles/lists
+      operationId: getFeedLists
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Custom feed lists
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/FeedList'
+    post:
+      summary: Create new feed circle/list
+      operationId: createFeedList
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+      responses:
+        '201':
+          description: Feed list created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeedList'
+
+  /feed/lists/{id}/members:
+    post:
+      summary: Add member to circle/list
+      operationId: addFeedListMember
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [user_id]
+              properties:
+                user_id:
+                  type: string
+      responses:
+        '200':
+          description: Member added
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /feed/lists/{id}/members/{user_id}:
+    delete:
+      summary: Remove member from circle/list
+      operationId: removeFeedListMember
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Member removed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /notifications:
+    get:
+      summary: Get notifications
+      operationId: getNotifications
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: cursor
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Notification items
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Notification'
+
+  /notifications/read-all:
+    put:
+      summary: Mark all notifications as read
+      operationId: markAllNotificationsRead
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Marked all read
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /notifications/{id}/read:
+    put:
+      summary: Mark single notification read
+      operationId: markNotificationRead
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Marked read
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /notifications/unread-count:
+    get:
+      summary: Get unread notifications count
+      operationId: getUnreadCount
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Count of unread notifications
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count:
+                    type: integer
+
+  /notifications/stream:
+    get:
+      summary: Server-Sent Events stream for real-time notifications
+      operationId: notificationStream
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: SSE event stream
+          content:
+            text/event-stream:
+              schema:
+                type: string
+
+  /notifications/preferences:
+    get:
+      summary: Get notification preferences
+      operationId: getNotificationPreferences
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: User notification preferences
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/NotificationPreference'
+    put:
+      summary: Update notification preferences
+      operationId: updateNotificationPreferences
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/NotificationPreference'
+      responses:
+        '200':
+          description: Preferences updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /media/upload-url:
+    post:
+      summary: Request presigned upload URL
+      operationId: requestUploadUrl
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UploadUrlRequest'
+      responses:
+        '200':
+          description: Upload URL and media ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadUrlResponse'
+
+  /media/{id}/status:
+    get:
+      summary: Check status of processed media
+      operationId: getMediaStatus
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Media status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MediaItem'
+
+  /moderation/reports:
+    post:
+      summary: Report abusive content or violation
+      operationId: createReport
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateReportRequest'
+      responses:
+        '201':
+          description: Report submitted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  responses:
+    BadRequest:
+      description: Invalid request payload
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Unauthorized:
+      description: Authentication required or token invalid
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Conflict:
+      description: Resource conflict (e.g. email or username already taken)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+  schemas:
+    HealthStatus:
+      type: object
+      required: [status, timestamp]
+      properties:
+        status:
+          type: string
+          example: ok
+        timestamp:
+          type: string
+          format: date-time
+        version:
+          type: string
+
+    RegisterRequest:
+      type: object
+      required: [email, username, password, display_name]
+      properties:
+        email:
+          type: string
+          format: email
+        username:
+          type: string
+          pattern: '^[a-zA-Z0-9_]{3,30}$'
+        password:
+          type: string
+          minLength: 8
+        display_name:
+          type: string
+          minLength: 1
+          maxLength: 50
+        city:
+          type: string
+          example: Bogotá
+
+    LoginRequest:
+      type: object
+      required: [login, password]
+      properties:
+        login:
+          type: string
+          description: Email or username
+        password:
+          type: string
+
+    RefreshRequest:
+      type: object
+      required: [refresh_token]
+      properties:
+        refresh_token:
+          type: string
+
+    AuthResponse:
+      type: object
+      required: [access_token, refresh_token, token_type, expires_in, user]
+      properties:
+        access_token:
+          type: string
+        refresh_token:
+          type: string
+        token_type:
+          type: string
+          example: Bearer
+        expires_in:
+          type: integer
+          example: 900
+        user:
+          $ref: '#/components/schemas/CurrentUser'
+
+    CurrentUser:
+      type: object
+      required: [id, email, username, display_name]
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+        username:
+          type: string
+        display_name:
+          type: string
+        avatar_url:
+          type: string
+          nullable: true
+        city:
+          type: string
+          nullable: true
+        is_verified:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+
+    Profile:
+      type: object
+      required: [id, username, display_name, followers_count, following_count, posts_count]
+      properties:
+        id:
+          type: string
+        username:
+          type: string
+        display_name:
+          type: string
+        bio:
+          type: string
+          nullable: true
+        avatar_url:
+          type: string
+          nullable: true
+        city:
+          type: string
+          nullable: true
+          example: Medellín
+        website:
+          type: string
+          nullable: true
+        followers_count:
+          type: integer
+        following_count:
+          type: integer
+        posts_count:
+          type: integer
+        is_following:
+          type: boolean
+        is_muted:
+          type: boolean
+        is_blocked:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+
+    UpdateProfileRequest:
+      type: object
+      properties:
+        display_name:
+          type: string
+        bio:
+          type: string
+        city:
+          type: string
+        website:
+          type: string
+        avatar_url:
+          type: string
+
+    CreatePostRequest:
+      type: object
+      required: [type, body]
+      properties:
+        type:
+          type: string
+          enum: [text, photo, video]
+        body:
+          type: string
+          maxLength: 1000
+        media_ids:
+          type: array
+          items:
+            type: string
+
+    Post:
+      type: object
+      required: [id, author, type, body, created_at, reactions_count, comments_count]
+      properties:
+        id:
+          type: string
+        author:
+          $ref: '#/components/schemas/Profile'
+        type:
+          type: string
+          enum: [text, photo, video]
+        body:
+          type: string
+        media:
+          type: array
+          items:
+            $ref: '#/components/schemas/MediaItem'
+        reactions_count:
+          type: integer
+        my_reaction:
+          type: string
+          nullable: true
+        comments_count:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+
+    FeedResponse:
+      type: object
+      required: [items, has_more]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Post'
+        next_cursor:
+          type: string
+          nullable: true
+        has_more:
+          type: boolean
+
+    MediaItem:
+      type: object
+      required: [id, storage_key, kind, status]
+      properties:
+        id:
+          type: string
+        storage_key:
+          type: string
+        url:
+          type: string
+        thumbnail_url:
+          type: string
+          nullable: true
+        kind:
+          type: string
+          enum: [photo, video]
+        width:
+          type: integer
+          nullable: true
+        height:
+          type: integer
+          nullable: true
+        duration:
+          type: number
+          nullable: true
+        status:
+          type: string
+          enum: [pending, processing, ready, failed]
+
+    ReactionRequest:
+      type: object
+      required: [type]
+      properties:
+        type:
+          type: string
+          enum: [like, love, arepa, parce, genius]
+
+    CreateCommentRequest:
+      type: object
+      required: [body]
+      properties:
+        body:
+          type: string
+          maxLength: 500
+        parent_id:
+          type: string
+          nullable: true
+
+    Comment:
+      type: object
+      required: [id, post_id, author, body, created_at]
+      properties:
+        id:
+          type: string
+        post_id:
+          type: string
+        author:
+          $ref: '#/components/schemas/Profile'
+        parent_id:
+          type: string
+          nullable: true
+        body:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        replies:
+          type: array
+          items:
+            $ref: '#/components/schemas/Comment'
+
+    FeedPreferences:
+      type: object
+      required: [show_text, show_photo, show_video]
+      properties:
+        show_text:
+          type: boolean
+          default: true
+        show_photo:
+          type: boolean
+          default: true
+        show_video:
+          type: boolean
+          default: true
+
+    FeedList:
+      type: object
+      required: [id, name, members_count]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        members_count:
+          type: integer
+
+    Notification:
+      type: object
+      required: [id, type, actor, created_at]
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          enum: [follow, reaction, comment, reply, mention]
+        actor:
+          $ref: '#/components/schemas/Profile'
+        entity_ref:
+          type: string
+          nullable: true
+        read_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+    NotificationPreference:
+      type: object
+      required: [type, enabled]
+      properties:
+        type:
+          type: string
+        enabled:
+          type: boolean
+
+    UploadUrlRequest:
+      type: object
+      required: [filename, content_type, size_bytes]
+      properties:
+        filename:
+          type: string
+        content_type:
+          type: string
+        size_bytes:
+          type: integer
+
+    UploadUrlResponse:
+      type: object
+      required: [upload_url, media_id, storage_key]
+      properties:
+        upload_url:
+          type: string
+        media_id:
+          type: string
+        storage_key:
+          type: string
+
+    CreateReportRequest:
+      type: object
+      required: [target_type, target_id, reason]
+      properties:
+        target_type:
+          type: string
+          enum: [post, user, comment]
+        target_id:
+          type: string
+        reason:
+          type: string
+        details:
+          type: string
+
+    ErrorResponse:
+      type: object
+      required: [error, code]
+      properties:
+        error:
+          type: string
+        code:
+          type: string
+        details:
+          type: object
+          nullable: true
+
+    SuccessResponse:
+      type: object
+      required: [success, message]
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string

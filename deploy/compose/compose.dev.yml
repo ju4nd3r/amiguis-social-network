@@ -1,0 +1,101 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: amiguis-postgres
+    environment:
+      POSTGRES_USER: amiguis
+      POSTGRES_PASSWORD: amiguis_secret_dev
+      POSTGRES_DB: amiguis
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U amiguis -d amiguis"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: amiguis-redis
+    ports:
+      - "6379:6379"
+
+  minio:
+    image: minio/minio:RELEASE.2024-01-18T22-51-28Z
+    container_name: amiguis-minio
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadminpassword
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - miniodata:/data
+
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: amiguis-mailpit
+    ports:
+      - "1025:1025" # SMTP
+      - "8025:8025" # Web UI
+
+  api:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.api
+    container_name: amiguis-api
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    environment:
+      PORT: 8080
+      DATABASE_URL: postgres://amiguis:amiguis_secret_dev@postgres:5432/amiguis?sslmode=disable
+      REDIS_URL: redis:6379
+      JWT_SECRET: amiguis-colombia-dev-secret-jwt-key
+      STORAGE_TYPE: local
+      STORAGE_DIR: /home/amiguis/uploads
+      STORAGE_URL: http://localhost:8080/uploads
+      APP_ENV: development
+    ports:
+      - "8080:8080"
+    volumes:
+      - uploads:/home/amiguis/uploads
+
+  worker:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.worker
+    container_name: amiguis-worker
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    environment:
+      DATABASE_URL: postgres://amiguis:amiguis_secret_dev@postgres:5432/amiguis?sslmode=disable
+      REDIS_URL: redis:6379
+      APP_ENV: development
+    volumes:
+      - uploads:/home/amiguis/uploads
+
+  web:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.web
+    container_name: amiguis-web
+    depends_on:
+      - api
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8080/api/v1
+    ports:
+      - "3000:3000"
+
+volumes:
+  pgdata:
+  miniodata:
+  uploads:

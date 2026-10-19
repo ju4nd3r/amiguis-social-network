@@ -1,0 +1,16 @@
+DROP TABLE IF EXISTS moderation_reports;
+DROP TABLE IF EXISTS outbox_events;
+DROP TABLE IF EXISTS notification_preferences;
+DROP TABLE IF EXISTS notifications;
+DROP TABLE IF EXISTS feed_list_members;
+DROP TABLE IF EXISTS feed_lists;
+DROP TABLE IF EXISTS feed_preferences;
+DROP TABLE IF EXISTS comments;
+DROP TABLE IF EXISTS reactions;
+DROP TABLE IF EXISTS post_media;
+DROP TABLE IF EXISTS posts;
+DROP TABLE IF EXISTS mutes;
+DROP TABLE IF EXISTS blocks;
+DROP TABLE IF EXISTS follows;
+DROP TABLE IF EXISTS profiles;
+DROP TABLE IF EXISTS users;
