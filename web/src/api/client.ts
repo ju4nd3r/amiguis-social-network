@@ -77,12 +77,55 @@ export interface Notification {
   created_at: string;
 }
 
+interface StoredLocalUser extends User {
+  password: string;
+}
+
+function translateErrorMessage(msg: string): string {
+  const lower = msg.toLowerCase();
+  if (lower.includes("invalid credentials")) {
+    return "Credenciales inválidas. Verifica tu usuario o contraseña.";
+  }
+  if (lower.includes("email already") || lower.includes("email exists")) {
+    return "Este correo electrónico ya está registrado.";
+  }
+  if (lower.includes("username already") || lower.includes("username exists")) {
+    return "Este nombre de usuario ya está en uso.";
+  }
+  if (lower.includes("password") && lower.includes("8")) {
+    return "La contraseña debe tener al menos 8 caracteres.";
+  }
+  return msg;
+}
+
 class ApiClient {
   private getToken(): string | null {
     if (typeof window !== "undefined") {
       return localStorage.getItem("amiguis_access_token");
     }
     return null;
+  }
+
+  private notifyAuthChange() {
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new Event("amiguis:auth-change"));
+    }
+  }
+
+  private getLocalUsers(): StoredLocalUser[] {
+    if (typeof window === "undefined") return [];
+    try {
+      const raw = localStorage.getItem("amiguis_local_users");
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  private saveLocalUsers(users: StoredLocalUser[]) {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("amiguis_local_users", JSON.stringify(users));
+    }
   }
 
   public setTokens(access: string, refresh: string) {
@@ -97,6 +140,7 @@ class ApiClient {
       localStorage.removeItem("amiguis_access_token");
       localStorage.removeItem("amiguis_refresh_token");
       localStorage.removeItem("amiguis_user");
+      this.notifyAuthChange();
     }
   }
 
@@ -118,7 +162,7 @@ class ApiClient {
 
     if (!res.ok) {
       const errData = await res.json().catch(() => ({ error: "Error desconocido" }));
-      throw new Error(errData.error || `HTTP error ${res.status}`);
+      throw new Error(translateErrorMessage(errData.error || `HTTP error ${res.status}`));
     }
 
     return res.json();
@@ -126,23 +170,88 @@ class ApiClient {
 
   // Auth
   async register(data: { email: string; username: string; password: string; display_name: string; city?: string }) {
-    const res = await this.request<{ access_token: string; refresh_token: string; user: User }>("/auth/register", {
-      method: "POST",
-      body: JSON.stringify(data),
-    });
-    this.setTokens(res.access_token, res.refresh_token);
-    localStorage.setItem("amiguis_user", JSON.stringify(res.user));
-    return res;
+    try {
+      const res = await this.request<{ access_token: string; refresh_token: string; user: User }>("/auth/register", {
+        method: "POST",
+        body: JSON.stringify(data),
+      });
+      this.setTokens(res.access_token, res.refresh_token);
+      localStorage.setItem("amiguis_user", JSON.stringify(res.user));
+      this.notifyAuthChange();
+      return res;
+    } catch (err: any) {
+      // If the error came from the server (not a network offline TypeError), rethrow it
+      if (!(err instanceof TypeError)) {
+        throw err;
+      }
+      // Validated local fallback when running frontend standalone
+      if (!data.password || data.password.length < 8) {
+        throw new Error("La contraseña debe tener al menos 8 caracteres.");
+      }
+      const localUsers = this.getLocalUsers();
+      if (localUsers.some((u) => u.email.toLowerCase() === data.email.toLowerCase())) {
+        throw new Error("Este correo electrónico ya está registrado.");
+      }
+      if (localUsers.some((u) => u.username.toLowerCase() === data.username.toLowerCase())) {
+        throw new Error("Este nombre de usuario ya está en uso.");
+      }
+      const newUser: User = {
+        id: `u-${Date.now()}`,
+        email: data.email.trim(),
+        username: data.username.trim(),
+        display_name: (data.display_name || data.username).trim(),
+        city: data.city || "Bogotá",
+        is_verified: true,
+        created_at: new Date().toISOString(),
+      };
+      this.saveLocalUsers([...localUsers, { ...newUser, password: data.password }]);
+      const res = {
+        access_token: `local-access-${newUser.id}`,
+        refresh_token: `local-refresh-${newUser.id}`,
+        user: newUser,
+      };
+      this.setTokens(res.access_token, res.refresh_token);
+      localStorage.setItem("amiguis_user", JSON.stringify(res.user));
+      this.notifyAuthChange();
+      return res;
+    }
   }
 
   async login(loginStr: string, password: string) {
-    const res = await this.request<{ access_token: string; refresh_token: string; user: User }>("/auth/login", {
-      method: "POST",
-      body: JSON.stringify({ login: loginStr, password }),
-    });
-    this.setTokens(res.access_token, res.refresh_token);
-    localStorage.setItem("amiguis_user", JSON.stringify(res.user));
-    return res;
+    try {
+      const res = await this.request<{ access_token: string; refresh_token: string; user: User }>("/auth/login", {
+        method: "POST",
+        body: JSON.stringify({ login: loginStr, password }),
+      });
+      this.setTokens(res.access_token, res.refresh_token);
+      localStorage.setItem("amiguis_user", JSON.stringify(res.user));
+      this.notifyAuthChange();
+      return res;
+    } catch (err: any) {
+      if (!(err instanceof TypeError)) {
+        throw err;
+      }
+      const cleanLogin = loginStr.trim().toLowerCase();
+      const localUsers = this.getLocalUsers();
+      const matched = localUsers.find(
+        (u) =>
+          (u.email.toLowerCase() === cleanLogin || u.username.toLowerCase() === cleanLogin) &&
+          u.password === password
+      );
+      if (!matched) {
+        throw new Error("Credenciales inválidas. Verifica tu usuario o contraseña.");
+      }
+      const { password: _, ...userWithoutPassword } = matched;
+      const res = {
+        access_token: `local-access-${userWithoutPassword.id}`,
+        refresh_token: `local-refresh-${userWithoutPassword.id}`,
+        user: userWithoutPassword,
+      };
+      this.setTokens(res.access_token, res.refresh_token);
+      localStorage.setItem("amiguis_user", JSON.stringify(res.user));
+      this.notifyAuthChange();
+      return res;
+    }
   }
 
   async getMe(): Promise<User> {
@@ -210,10 +319,27 @@ class ApiClient {
   }
 
   async updateProfile(data: { display_name?: string; bio?: string; city?: string; website?: string; avatar_url?: string }): Promise<Profile> {
-    return this.request<Profile>("/profiles/me", {
+    const updated = await this.request<Profile>("/profiles/me", {
       method: "PUT",
       body: JSON.stringify(data),
     });
+    if (typeof window !== "undefined") {
+      try {
+        const raw = localStorage.getItem("amiguis_user");
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          const nextUser = {
+            ...parsed,
+            display_name: updated.display_name || data.display_name || parsed.display_name,
+            city: updated.city || data.city || parsed.city,
+            avatar_url: updated.avatar_url || data.avatar_url || parsed.avatar_url,
+          };
+          localStorage.setItem("amiguis_user", JSON.stringify(nextUser));
+          this.notifyAuthChange();
+        }
+      } catch {}
+    }
+    return updated;
   }
 
   async followUser(userId: string) {
