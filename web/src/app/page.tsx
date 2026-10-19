@@ -136,15 +136,26 @@ export default function FeedPage() {
   );
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("amiguis_user");
-      if (saved) {
-        try {
-          setCurrentUser(JSON.parse(saved));
-        } catch {}
+    const syncUser = () => {
+      if (typeof window !== "undefined") {
+        const saved = localStorage.getItem("amiguis_user");
+        if (saved) {
+          try {
+            setCurrentUser(JSON.parse(saved));
+          } catch {
+            setCurrentUser(null);
+          }
+        } else {
+          setCurrentUser(null);
+        }
       }
-    }
+    };
+    syncUser();
+    window.addEventListener("amiguis:auth-change", syncUser);
     fetchFeed();
+    return () => {
+      window.removeEventListener("amiguis:auth-change", syncUser);
+    };
   }, [fetchFeed]);
 
   const handlePostCreated = (newPost: Post) => {

@@ -100,8 +100,15 @@ test.describe("Amiguis E2E Critical User Journeys", () => {
     );
   });
 
-  test("register new amigui account flow", async ({ page }) => {
+  test("shows temporary status modal on register/login and replaces 'Cuenta' button with user name", async ({
+    page,
+  }) => {
     await page.goto("/login");
+
+    // Initially, header button displays "Cuenta"
+    const headerAccountBtn = page.getByTestId("header-account-button");
+    await expect(headerAccountBtn).toHaveText("Cuenta");
+
     await page.getByRole("button", { name: "Registrarse" }).click();
 
     const uniqueUser = `amigui_${Date.now()}`;
@@ -111,7 +118,27 @@ test.describe("Amiguis E2E Critical User Journeys", () => {
     await page.getByPlaceholder("Camila Restrepo").fill("Amigui Colombiano");
     await page.getByPlaceholder("camila_medallo").fill(uniqueUser);
     await page.getByPlaceholder("••••••••").fill("ClaveSegura123!");
+
+    // Submit without Habeas Data checkbox -> error modal appears
+    await page.getByRole("button", { name: "Crear mi cuenta" }).click();
+    const modal = page.getByTestId("auth-status-modal");
+    await expect(modal).toBeVisible();
+    await expect(modal).toContainText("No se pudo completar el registro");
+    await page.getByTestId("auth-modal-close").click();
+    await expect(modal).toHaveCount(0);
+
+    // Check Habeas Data and submit -> success modal appears and header button changes to user's name
     await page.getByRole("checkbox").check();
     await page.getByRole("button", { name: "Crear mi cuenta" }).click();
+
+    await expect(modal).toBeVisible();
+    await expect(modal).toContainText("¡Cuenta creada con éxito!");
+    await expect(modal).toContainText("Amigui Colombiano");
+    await expect(headerAccountBtn).toContainText("Amigui Colombiano");
+
+    // Click Continuar on the modal -> redirects to home and header keeps user's name
+    await page.getByTestId("auth-modal-close").click();
+    await expect(page).toHaveURL("/");
+    await expect(headerAccountBtn).toContainText("Amigui Colombiano");
   });
 });
