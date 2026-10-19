@@ -76,6 +76,14 @@ func (s *ContentService) CreatePost(ctx context.Context, in CreatePostInput) (*P
 	}
 
 	authorProfile, _ := s.profileFetcher.GetByUserID(ctx, post.AuthorID)
+	if authorProfile == nil {
+		authorProfile = &profileDomain.Profile{
+			UserID:      post.AuthorID,
+			Username:    "amigui",
+			DisplayName: "Amigui",
+			City:        "Colombia",
+		}
+	}
 
 	return &PostDTO{
 		ID:             post.ID,
@@ -96,6 +104,14 @@ func (s *ContentService) GetPost(ctx context.Context, id, viewerID string) (*Pos
 	}
 
 	authorProfile, _ := s.profileFetcher.GetByUserID(ctx, post.AuthorID)
+	if authorProfile == nil {
+		authorProfile = &profileDomain.Profile{
+			UserID:      post.AuthorID,
+			Username:    "amigui",
+			DisplayName: "Amigui",
+			City:        "Colombia",
+		}
+	}
 
 	return &PostDTO{
 		ID:             post.ID,

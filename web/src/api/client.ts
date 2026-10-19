@@ -174,7 +174,7 @@ class ApiClient {
   }
 
   // Engagement
-  async addReaction(postId: string, type: "like" | "love" | "arepa" | "parce" | "genius") {
+  async addReaction(postId: string, type: "interesante" = "interesante") {
     return this.request<{ success: boolean }>(`/posts/${postId}/reactions`, {
       method: "POST",
       body: JSON.stringify({ type }),
@@ -188,7 +188,12 @@ class ApiClient {
   }
 
   async getComments(postId: string): Promise<Comment[]> {
-    return this.request<Comment[]>(`/posts/${postId}/comments`);
+    try {
+      const res = await this.request<Comment[] | null>(`/posts/${postId}/comments`);
+      return Array.isArray(res) ? res : [];
+    } catch {
+      return [];
+    }
   }
 
   async addComment(postId: string, body: string, parentId?: string): Promise<Comment> {

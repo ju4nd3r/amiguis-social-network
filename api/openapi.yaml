@@ -1240,7 +1240,7 @@ components:
       properties:
         type:
           type: string
-          enum: [like, love, arepa, parce, genius]
+          enum: [interesante]
 
     CreateCommentRequest:
       type: object

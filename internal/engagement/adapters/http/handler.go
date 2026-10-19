@@ -23,13 +23,13 @@ func (h *EngagementHandler) RegisterRoutes(r chi.Router, authMiddleware func(htt
 	r.Group(func(pr chi.Router) {
 		pr.Use(optionalAuth)
 		pr.Get("/posts/{id}/comments", h.GetComments)
+		pr.Post("/posts/{id}/reactions", h.AddReaction)
+		pr.Delete("/posts/{id}/reactions", h.RemoveReaction)
+		pr.Post("/posts/{id}/comments", h.AddComment)
 	})
 
 	r.Group(func(protected chi.Router) {
 		protected.Use(authMiddleware)
-		protected.Post("/posts/{id}/reactions", h.AddReaction)
-		protected.Delete("/posts/{id}/reactions", h.RemoveReaction)
-		protected.Post("/posts/{id}/comments", h.AddComment)
 		protected.Delete("/comments/{id}", h.DeleteComment)
 	})
 }
@@ -40,16 +40,17 @@ type reactionReq struct {
 
 func (h *EngagementHandler) AddReaction(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.UserIDFromContext(r.Context())
-	if !ok {
-		respondError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Authentication required")
-		return
+	if !ok || userID == "" {
+		userID = "guest-amigui"
 	}
 	postID := chi.URLParam(r, "id")
 
 	var req reactionReq
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		respondError(w, http.StatusBadRequest, "BAD_REQUEST", "Invalid request body")
-		return
+		req.Type = string(domain.ReactionInteresante)
+	}
+	if req.Type == "" {
+		req.Type = string(domain.ReactionInteresante)
 	}
 
 	if err := h.service.AddReaction(r.Context(), postID, userID, domain.ReactionType(req.Type)); err != nil {
@@ -61,7 +62,10 @@ func (h *EngagementHandler) AddReaction(w http.ResponseWriter, r *http.Request) 
 }
 
 func (h *EngagementHandler) RemoveReaction(w http.ResponseWriter, r *http.Request) {
-	userID, _ := middleware.UserIDFromContext(r.Context())
+	userID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok || userID == "" {
+		userID = "guest-amigui"
+	}
 	postID := chi.URLParam(r, "id")
 
 	if err := h.service.RemoveReaction(r.Context(), postID, userID); err != nil {
@@ -79,9 +83,8 @@ type commentReq struct {
 
 func (h *EngagementHandler) AddComment(w http.ResponseWriter, r *http.Request) {
 	authorID, ok := middleware.UserIDFromContext(r.Context())
-	if !ok {
-		respondError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Authentication required")
-		return
+	if !ok || authorID == "" {
+		authorID = "guest-amigui"
 	}
 	postID := chi.URLParam(r, "id")
 
@@ -106,6 +109,9 @@ func (h *EngagementHandler) GetComments(w http.ResponseWriter, r *http.Request) 
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "SERVER_ERROR", err.Error())
 		return
+	}
+	if comments == nil {
+		comments = make([]*app.CommentDTO, 0)
 	}
 	respondJSON(w, http.StatusOK, comments)
 }
