@@ -7,7 +7,7 @@ import (
 )
 
 var (
-	ErrInvalidReactionType = errors.New("reaction type must be: like, love, arepa, parce, or genius")
+	ErrInvalidReactionType = errors.New("reaction type must be: interesante")
 	ErrEmptyCommentBody    = errors.New("comment body cannot be empty")
 	ErrCommentBodyTooLong  = errors.New("comment body exceeds 500 characters")
 	ErrCommentNotFound     = errors.New("comment not found")
@@ -17,11 +17,7 @@ var (
 type ReactionType string
 
 const (
-	ReactionLike   ReactionType = "like"
-	ReactionLove   ReactionType = "love"
-	ReactionArepa  ReactionType = "arepa"
-	ReactionParce  ReactionType = "parce"
-	ReactionGenius ReactionType = "genius"
+	ReactionInteresante ReactionType = "interesante"
 )
 
 type Reaction struct {
@@ -42,9 +38,7 @@ type Comment struct {
 }
 
 func NewReaction(postID, userID string, rType ReactionType) (*Reaction, error) {
-	switch rType {
-	case ReactionLike, ReactionLove, ReactionArepa, ReactionParce, ReactionGenius:
-	default:
+	if rType != ReactionInteresante {
 		return nil, ErrInvalidReactionType
 	}
 	return &Reaction{

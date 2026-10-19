@@ -23,13 +23,13 @@ func NewContentHandler(service *app.ContentService) *ContentHandler {
 func (h *ContentHandler) RegisterRoutes(r chi.Router, authMiddleware func(http.Handler) http.Handler, optionalAuth func(http.Handler) http.Handler) {
 	r.Group(func(pr chi.Router) {
 		pr.Use(optionalAuth)
+		pr.Post("/posts", h.CreatePost)
 		pr.Get("/posts/{id}", h.GetPost)
 		pr.Get("/users/{id}/posts", h.GetUserPosts)
 	})
 
 	r.Group(func(protected chi.Router) {
 		protected.Use(authMiddleware)
-		protected.Post("/posts", h.CreatePost)
 		protected.Delete("/posts/{id}", h.DeletePost)
 	})
 }
@@ -43,9 +43,8 @@ type createPostRequest struct {
 
 func (h *ContentHandler) CreatePost(w http.ResponseWriter, r *http.Request) {
 	authorID, ok := middleware.UserIDFromContext(r.Context())
-	if !ok {
-		respondError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Authentication required")
-		return
+	if !ok || authorID == "" {
+		authorID = "guest-amigui"
 	}
 
 	var req createPostRequest

@@ -95,6 +95,13 @@ func (s *EngagementService) AddComment(ctx context.Context, postID, authorID str
 	}
 
 	authorProfile, _ := s.profileFetcher.GetByUserID(ctx, authorID)
+	if authorProfile == nil {
+		authorProfile = &profileDomain.Profile{
+			UserID:      authorID,
+			Username:    "amigui",
+			DisplayName: "Amigui",
+		}
+	}
 
 	return &CommentDTO{
 		ID:        comment.ID,
@@ -103,21 +110,28 @@ func (s *EngagementService) AddComment(ctx context.Context, postID, authorID str
 		ParentID:  comment.ParentID,
 		Body:      comment.Body,
 		CreatedAt: comment.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		Replies:   make([]*CommentDTO, 0),
 	}, nil
 }
 
 func (s *EngagementService) GetComments(ctx context.Context, postID string) ([]*CommentDTO, error) {
 	comments, err := s.repo.GetCommentsByPostID(ctx, postID)
 	if err != nil {
-		return nil, err
+		return make([]*CommentDTO, 0), err
 	}
 
-	// Build nested comment tree (parent -> replies)
 	dtoMap := make(map[string]*CommentDTO)
-	var topLevel []*CommentDTO
+	topLevel := make([]*CommentDTO, 0)
 
 	for _, c := range comments {
 		author, _ := s.profileFetcher.GetByUserID(ctx, c.AuthorID)
+		if author == nil {
+			author = &profileDomain.Profile{
+				UserID:      c.AuthorID,
+				Username:    "amigui",
+				DisplayName: "Amigui",
+			}
+		}
 		dto := &CommentDTO{
 			ID:        c.ID,
 			PostID:    c.PostID,
@@ -125,7 +139,7 @@ func (s *EngagementService) GetComments(ctx context.Context, postID string) ([]*
 			ParentID:  c.ParentID,
 			Body:      c.Body,
 			CreatedAt: c.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
-			Replies:   []*CommentDTO{},
+			Replies:   make([]*CommentDTO, 0),
 		}
 		dtoMap[c.ID] = dto
 	}

@@ -74,7 +74,7 @@ func (s *FeedService) GetFeed(ctx context.Context, viewerID string, filter domai
 		if err == nil {
 			candidateAuthorIDs = members
 		}
-	} else {
+	} else if viewerID != "" {
 		// Normal chronological feed: People I follow + my own posts
 		following, err := s.socialGraphFetcher.GetFollowingUserIDs(ctx, viewerID)
 		if err == nil {
@@ -105,9 +105,17 @@ func (s *FeedService) GetFeed(ctx context.Context, viewerID string, filter domai
 		return nil, err
 	}
 
-	var items []*PostDTO
+	items := make([]*PostDTO, 0, len(posts))
 	for _, p := range posts {
 		author, _ := s.profileFetcher.GetByUserID(ctx, p.AuthorID)
+		if author == nil {
+			author = &profileDomain.Profile{
+				UserID:      p.AuthorID,
+				Username:    "amigui",
+				DisplayName: "Amigui",
+				City:        "Colombia",
+			}
+		}
 		items = append(items, &PostDTO{
 			ID:             p.ID,
 			Author:         author,

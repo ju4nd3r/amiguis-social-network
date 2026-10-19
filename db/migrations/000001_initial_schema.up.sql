@@ -88,7 +88,7 @@ CREATE INDEX IF NOT EXISTS idx_post_media_post_id ON post_media(post_id);
 CREATE TABLE IF NOT EXISTS reactions (
     post_id VARCHAR(36) NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
     user_id VARCHAR(36) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    type VARCHAR(20) NOT NULL CHECK (type IN ('like', 'love', 'arepa', 'parce', 'genius')),
+    type VARCHAR(20) NOT NULL CHECK (type IN ('interesante')),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     PRIMARY KEY (post_id, user_id)
 );
