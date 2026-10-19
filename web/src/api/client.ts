@@ -1,4 +1,12 @@
 // Typed API Client matching api/openapi.yaml single source of truth
+import {
+  CatalogCategory,
+  CatalogItem,
+  INITIAL_CATALOG_ITEMS,
+  ReviewMetadata,
+} from "@/data/catalog";
+
+export type { CatalogCategory, CatalogItem, ReviewMetadata };
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api/v1";
 
@@ -42,9 +50,10 @@ export interface MediaItem {
 export interface Post {
   id: string;
   author: Profile;
-  type: "text" | "photo" | "video";
+  type: "text" | "photo" | "video" | "review";
   body: string;
   media?: MediaItem[];
+  review?: ReviewMetadata;
   reactions_count: number;
   comments_count: number;
   comments?: Comment[];
@@ -268,11 +277,67 @@ class ApiClient {
   }
 
   // Posts
-  async createPost(type: "text" | "photo" | "video", body: string, media?: MediaItem[]): Promise<Post> {
-    return this.request<Post>("/posts", {
+  public getLocalPosts(): Post[] {
+    if (typeof window === "undefined") return [];
+    try {
+      const raw = localStorage.getItem("amiguis_local_posts");
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  public saveLocalPost(post: Post) {
+    if (typeof window === "undefined") return;
+    const current = this.getLocalPosts().filter((p) => p.id !== post.id);
+    localStorage.setItem("amiguis_local_posts", JSON.stringify([post, ...current]));
+  }
+
+  public getFollowingIds(): string[] {
+    if (typeof window === "undefined") return ["u-1", "u-2", "u-3"];
+    try {
+      const raw = localStorage.getItem("amiguis_following_ids");
+      if (!raw) {
+        const defaults = ["u-1", "u-2", "u-3"];
+        localStorage.setItem("amiguis_following_ids", JSON.stringify(defaults));
+        return defaults;
+      }
+      return JSON.parse(raw);
+    } catch {
+      return ["u-1", "u-2", "u-3"];
+    }
+  }
+
+  public toggleFollowAuthor(authorId: string): boolean {
+    if (typeof window === "undefined") return false;
+    const current = new Set(this.getFollowingIds());
+    let nowFollowing = false;
+    if (current.has(authorId)) {
+      current.delete(authorId);
+      nowFollowing = false;
+      this.unfollowUser(authorId).catch(() => {});
+    } else {
+      current.add(authorId);
+      nowFollowing = true;
+      this.followUser(authorId).catch(() => {});
+    }
+    localStorage.setItem("amiguis_following_ids", JSON.stringify(Array.from(current)));
+    window.dispatchEvent(new Event("amiguis:follow-change"));
+    return nowFollowing;
+  }
+
+  async createPost(
+    type: "text" | "photo" | "video" | "review",
+    body: string,
+    media?: MediaItem[],
+    review?: ReviewMetadata
+  ): Promise<Post> {
+    const post = await this.request<Post>("/posts", {
       method: "POST",
-      body: JSON.stringify({ type, body, media }),
+      body: JSON.stringify({ type, body, media, review }),
     });
+    this.saveLocalPost(post);
+    return post;
   }
 
   async getPost(id: string): Promise<Post> {
@@ -280,7 +345,175 @@ class ApiClient {
   }
 
   async deletePost(id: string): Promise<{ success: boolean }> {
+    if (typeof window !== "undefined") {
+      const next = this.getLocalPosts().filter((p) => p.id !== id);
+      localStorage.setItem("amiguis_local_posts", JSON.stringify(next));
+    }
     return this.request<{ success: boolean }>(`/posts/${id}`, { method: "DELETE" });
+  }
+
+  // Catalog (Movies, Series & Books) & Reviews
+  private getLocalCatalog(): CatalogItem[] {
+    if (typeof window === "undefined") return INITIAL_CATALOG_ITEMS;
+    try {
+      const raw = localStorage.getItem("amiguis_catalog_items");
+      if (!raw) {
+        localStorage.setItem("amiguis_catalog_items", JSON.stringify(INITIAL_CATALOG_ITEMS));
+        return INITIAL_CATALOG_ITEMS;
+      }
+      return JSON.parse(raw);
+    } catch {
+      return INITIAL_CATALOG_ITEMS;
+    }
+  }
+
+  private saveLocalCatalog(items: CatalogItem[]) {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("amiguis_catalog_items", JSON.stringify(items));
+    }
+  }
+
+  async searchCatalog(query = "", category = "all"): Promise<CatalogItem[]> {
+    try {
+      const params = new URLSearchParams();
+      if (query) params.set("q", query);
+      if (category && category !== "all") params.set("category", category);
+      const res = await this.request<{ items: CatalogItem[] }>(`/catalog?${params.toString()}`);
+      if (res && Array.isArray(res.items)) {
+        return res.items;
+      }
+    } catch {
+      // Fallback to local catalog store
+    }
+    const items = this.getLocalCatalog();
+    const q = query.trim().toLowerCase();
+    const cat = category.trim().toLowerCase();
+    return items.filter((item) => {
+      if (cat && cat !== "all" && item.category !== cat) return false;
+      if (!q) return true;
+      return (
+        item.title.toLowerCase().includes(q) ||
+        item.creator.toLowerCase().includes(q) ||
+        item.producer.toLowerCase().includes(q) ||
+        item.cast.some((c) => c.toLowerCase().includes(q)) ||
+        item.genres.some((g) => g.toLowerCase().includes(q))
+      );
+    });
+  }
+
+  async getCatalogItem(id: string): Promise<CatalogItem | null> {
+    try {
+      const item = await this.request<CatalogItem>(`/catalog/${id}`);
+      if (item && item.id) return item;
+    } catch {
+      // Fallback to local catalog store
+    }
+    const items = this.getLocalCatalog();
+    return items.find((i) => i.id === id) || null;
+  }
+
+  async submitCatalogReview(
+    itemId: string,
+    data: { body: string; rating: number; watched: boolean; liked: boolean }
+  ): Promise<{ post: Post; item: CatalogItem }> {
+    let currentAuthor: Profile = {
+      id: "local-user",
+      username: "amigui_col",
+      display_name: "Amigui",
+      city: "Bogotá",
+      followers_count: 1,
+      following_count: 3,
+      posts_count: 1,
+      created_at: new Date().toISOString(),
+    };
+
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("amiguis_user");
+      if (saved) {
+        try {
+          const parsed: User = JSON.parse(saved);
+          currentAuthor = {
+            id: parsed.id || "local-user",
+            username: parsed.username || "amigui_col",
+            display_name: parsed.display_name || parsed.username || "Amigui",
+            city: parsed.city || "Bogotá",
+            followers_count: 1,
+            following_count: 3,
+            posts_count: 1,
+            created_at: parsed.created_at || new Date().toISOString(),
+          };
+        } catch {}
+      }
+    }
+
+    // Update local catalog item rating as well
+    const catalog = this.getLocalCatalog();
+    const idx = catalog.findIndex((i) => i.id === itemId);
+    const baseItem = idx >= 0 ? catalog[idx] : INITIAL_CATALOG_ITEMS[0];
+    const updatedItem: CatalogItem = { ...baseItem };
+    if (data.rating > 0) {
+      const total = updatedItem.average_rating * updatedItem.ratings_count + data.rating;
+      updatedItem.ratings_count += 1;
+      updatedItem.average_rating = Math.round((total / updatedItem.ratings_count) * 10) / 10;
+      if (idx >= 0) {
+        catalog[idx] = updatedItem;
+        this.saveLocalCatalog(catalog);
+      }
+    }
+
+    try {
+      const res = await this.request<{ post: Post; item: CatalogItem }>(`/catalog/${itemId}/review`, {
+        method: "POST",
+        body: JSON.stringify(data),
+      });
+      if (res && res.post) {
+        const enrichedPost: Post = {
+          ...res.post,
+          author:
+            res.post.author?.username && res.post.author.username !== "amigui"
+              ? res.post.author
+              : currentAuthor,
+        };
+        this.saveLocalPost(enrichedPost);
+        return { post: enrichedPost, item: res.item || updatedItem };
+      }
+    } catch {
+      // Fallback to local post creation when backend is offline
+    }
+
+    const reviewMeta: ReviewMetadata = {
+      item_id: updatedItem.id,
+      category: updatedItem.category,
+      item_title: updatedItem.title,
+      item_year: updatedItem.year,
+      poster_url: updatedItem.poster_url,
+      rating: data.rating,
+      watched: data.watched,
+      liked: data.liked,
+      creator: updatedItem.creator,
+      producer: updatedItem.producer,
+    };
+
+    const cleanBody =
+      data.body.trim() ||
+      (data.watched
+        ? `Marcó "${updatedItem.title}" como vista/visto.`
+        : `Compartió una reseña sobre "${updatedItem.title}".`);
+
+    const localPost: Post = {
+      id: `review-${Date.now()}`,
+      author: currentAuthor,
+      type: "review",
+      body: cleanBody,
+      review: reviewMeta,
+      reactions_count: 0,
+      comments_count: 0,
+      comments: [],
+      created_at: new Date().toISOString(),
+    };
+
+    this.saveLocalPost(localPost);
+    return { post: localPost, item: updatedItem };
   }
 
   // Engagement

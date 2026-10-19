@@ -8,6 +8,7 @@ interface FilterBarProps {
 export function FilterBar({ currentType, onSelectType }: FilterBarProps) {
   const filters = [
     { id: "all", label: "🇨🇴 Todo" },
+    { id: "review", label: "⭐ Reseñas" },
     { id: "photo", label: "📸 Fotos" },
     { id: "video", label: "🎥 Videos" },
     { id: "text", label: "📝 Texto" },

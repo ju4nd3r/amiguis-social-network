@@ -141,4 +141,53 @@ test.describe("Amiguis E2E Critical User Journeys", () => {
     await expect(page).toHaveURL("/");
     await expect(headerAccountBtn).toContainText("Amigui Colombiano");
   });
+
+  test("searches movies, series, and books, shows full details modal, and publishes tagged review post to timeline", async ({
+    page,
+  }) => {
+    await page.goto("/catalog");
+
+    // Search for a movie ("Encanto")
+    const searchInput = page.getByTestId("catalog-search-input");
+    await searchInput.fill("Encanto");
+
+    const encantoCard = page.getByTestId("catalog-item-cat-movie-2");
+    await expect(encantoCard).toBeVisible();
+    await encantoCard.click();
+
+    // Detail modal opens with description, year, average rating, photo, casting, and producer
+    const detailModal = page.getByTestId("catalog-detail-modal");
+    await expect(detailModal).toBeVisible();
+    await expect(page.getByTestId("detail-title")).toHaveText("Encanto");
+    await expect(page.getByTestId("detail-year")).toContainText("2021");
+    await expect(page.getByTestId("detail-average-rating")).toContainText("/ 5.0");
+    await expect(page.getByTestId("detail-description")).toContainText(
+      "familia Madrigal"
+    );
+    await expect(page.getByTestId("detail-cast")).toContainText(
+      "María Cecilia Botero"
+    );
+    await expect(page.getByTestId("detail-producer")).toContainText(
+      "Walt Disney Animation Studios"
+    );
+
+    // Rate with 5 stars, toggle Like, verify Vista/Visto is active, and write a review
+    await page.getByTestId("toggle-like-btn").click();
+    await page.getByTestId("star-rating-5").click();
+    await page
+      .getByTestId("review-textarea")
+      .fill("¡Hermosa película inspirada en nuestra tierra colombiana!");
+    await page.getByTestId("submit-review-btn").click();
+
+    await expect(page.getByTestId("review-published-banner")).toBeVisible();
+
+    // Navigate to timeline and verify the review post appears with the review tag
+    await page.goto("/");
+    await expect(page.getByTestId("review-post-tag").first()).toContainText(
+      "Reseña • Película"
+    );
+    await expect(
+      page.getByText("¡Hermosa película inspirada en nuestra tierra colombiana!")
+    ).toBeVisible();
+  });
 });

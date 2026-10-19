@@ -1,16 +1,36 @@
 "use client";
 
 import { useState } from "react";
-import { Post, Comment, api } from "@/api/client";
-import { MessageCircle, Trash2, MapPin, Lightbulb } from "lucide-react";
+import { Post, Comment, CatalogItem, api } from "@/api/client";
+import { getCategoryLabel } from "@/data/catalog";
+import { CatalogItemModal } from "./CatalogItemModal";
+import {
+  MessageCircle,
+  Trash2,
+  MapPin,
+  Lightbulb,
+  Star,
+  Eye,
+  Heart,
+  Film,
+  Tv,
+  BookOpen,
+  Tag,
+} from "lucide-react";
 
 interface PostCardProps {
   post: Post;
   currentUserId?: string;
   onPostDeleted?: (id: string) => void;
+  onReviewCreated?: (newPost: Post) => void;
 }
 
-export function PostCard({ post, currentUserId, onPostDeleted }: PostCardProps) {
+export function PostCard({
+  post,
+  currentUserId,
+  onPostDeleted,
+  onReviewCreated,
+}: PostCardProps) {
   const [reactionsCount, setReactionsCount] = useState(post.reactions_count || 0);
   const [myReaction, setMyReaction] = useState<string | undefined>(post.my_reaction);
   const [showComments, setShowComments] = useState(false);
@@ -21,6 +41,15 @@ export function PostCard({ post, currentUserId, onPostDeleted }: PostCardProps) 
   );
   const [commentText, setCommentText] = useState("");
   const [loadingComments, setLoadingComments] = useState(false);
+  const [detailItem, setDetailItem] = useState<CatalogItem | null>(null);
+
+  const openReviewedItemDetail = async () => {
+    if (!post.review?.item_id) return;
+    const item = await api.getCatalogItem(post.review.item_id);
+    if (item) {
+      setDetailItem(item);
+    }
+  };
 
   const toggleInteresante = async () => {
     const wasActive = myReaction === "interesante";
@@ -131,9 +160,27 @@ export function PostCard({ post, currentUserId, onPostDeleted }: PostCardProps) 
 
   const authorName = post.author?.display_name || "Amigui";
   const authorUsername = post.author?.username || "amigui";
+  const isReview = post.type === "review" || Boolean(post.review);
+
+  const ReviewCategoryIcon =
+    post.review?.category === "movie"
+      ? Film
+      : post.review?.category === "series"
+      ? Tv
+      : BookOpen;
 
   return (
     <article className="bg-white dark:bg-[#1E2229] border border-gray-200 dark:border-gray-800/80 rounded-2xl p-4 mb-4 shadow-sm transition-colors">
+      {detailItem && (
+        <CatalogItemModal
+          item={detailItem}
+          onClose={() => setDetailItem(null)}
+          onReviewSubmitted={(newPost) => {
+            if (onReviewCreated) onReviewCreated(newPost);
+          }}
+        />
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center space-x-3">
@@ -141,13 +188,27 @@ export function PostCard({ post, currentUserId, onPostDeleted }: PostCardProps) 
             {authorName.charAt(0).toUpperCase()}
           </div>
           <div>
-            <div className="flex items-center space-x-1.5">
+            <div className="flex items-center flex-wrap gap-1.5">
               <span className="font-semibold text-sm text-gray-900 dark:text-gray-100">
                 {authorName}
               </span>
               <span className="text-xs text-gray-500 dark:text-gray-400">
                 @{authorUsername}
               </span>
+              {isReview && (
+                <span
+                  data-testid="review-post-tag"
+                  className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-[#FCD116]/20 text-amber-700 dark:text-[#FCD116] border border-[#FCD116]/40"
+                >
+                  <Tag className="w-2.5 h-2.5 mr-0.5" />
+                  <span>
+                    Reseña
+                    {post.review?.category
+                      ? ` • ${getCategoryLabel(post.review.category)}`
+                      : ""}
+                  </span>
+                </span>
+              )}
             </div>
             {post.author?.city && (
               <div className="flex items-center text-xs text-amber-600 dark:text-amber-400 font-medium mt-0.5">
@@ -168,6 +229,75 @@ export function PostCard({ post, currentUserId, onPostDeleted }: PostCardProps) 
           </button>
         )}
       </div>
+
+      {/* Embedded Reviewed Movie / Series / Book Card */}
+      {post.review && (
+        <div
+          onClick={openReviewedItemDetail}
+          data-testid={`review-card-${post.review.item_id}`}
+          className="mb-3 p-3 rounded-xl bg-gray-50 dark:bg-gray-900/70 border border-gray-200 dark:border-gray-800 flex space-x-3 cursor-pointer hover:border-[#FCD116]/60 transition-colors"
+        >
+          <img
+            src={post.review.poster_url}
+            alt={post.review.item_title}
+            className="w-14 h-20 object-cover rounded-lg shadow-sm shrink-0 border border-gray-200 dark:border-gray-700"
+          />
+          <div className="flex-1 min-w-0 space-y-1">
+            <div className="flex items-center space-x-1.5 text-[11px] font-bold text-[#003893] dark:text-[#FCD116]">
+              <ReviewCategoryIcon className="w-3.5 h-3.5 shrink-0" />
+              <span>{getCategoryLabel(post.review.category)}</span>
+              <span className="text-gray-400">•</span>
+              <span className="text-gray-500 dark:text-gray-400">
+                {post.review.item_year}
+              </span>
+            </div>
+
+            <h3 className="text-sm font-extrabold text-gray-900 dark:text-white truncate">
+              {post.review.item_title}
+            </h3>
+
+            <div className="flex flex-wrap items-center gap-2 pt-0.5">
+              {post.review.rating > 0 && (
+                <div
+                  data-testid="review-post-stars"
+                  className="inline-flex items-center space-x-0.5"
+                >
+                  {[1, 2, 3, 4, 5].map((s) => (
+                    <Star
+                      key={s}
+                      className={`w-3.5 h-3.5 ${
+                        s <= post.review!.rating
+                          ? "text-[#FCD116] fill-[#FCD116]"
+                          : "text-gray-300 dark:text-gray-700"
+                      }`}
+                    />
+                  ))}
+                </div>
+              )}
+
+              {post.review.watched && (
+                <span
+                  data-testid="review-post-watched"
+                  className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30"
+                >
+                  <Eye className="w-3 h-3 mr-0.5" />
+                  <span>Vista / Visto</span>
+                </span>
+              )}
+
+              {post.review.liked && (
+                <span
+                  data-testid="review-post-liked"
+                  className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30"
+                >
+                  <Heart className="w-3 h-3 mr-0.5 fill-current" />
+                  <span>Me gusta</span>
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Body */}
       <p className="text-sm text-gray-800 dark:text-gray-200 leading-relaxed whitespace-pre-line mb-3">
