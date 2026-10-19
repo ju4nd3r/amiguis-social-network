@@ -47,6 +47,7 @@ export interface Post {
   media?: MediaItem[];
   reactions_count: number;
   comments_count: number;
+  comments?: Comment[];
   my_reaction?: string;
   created_at: string;
 }

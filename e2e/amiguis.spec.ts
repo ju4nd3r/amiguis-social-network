@@ -47,11 +47,20 @@ test.describe("Amiguis E2E Critical User Journeys", () => {
     const firstReactBtn = page.getByRole("button", { name: /Interesante/i }).first();
     await firstReactBtn.click();
 
-    // Click the comment button on the first post and ensure no error occurs
+    // Click the comment button on the first post ("Comentarios (2)") and ensure the 2 existing comments are shown
     const firstCommentToggle = page
-      .getByRole("button", { name: /Comentarios/i })
+      .getByRole("button", { name: /Comentarios \(2\)/i })
       .first();
+    await expect(firstCommentToggle).toBeVisible();
     await firstCommentToggle.click();
+
+    await expect(page.getByText(/No hay comentarios aún/i)).toHaveCount(0);
+    await expect(
+      page.getByText(/Totalmente de acuerdo, Cami/i)
+    ).toBeVisible();
+    await expect(
+      page.getByText(/Un abrazo desde Cali, amigui/i)
+    ).toBeVisible();
 
     // Submit a new comment
     const commentInput = page
@@ -61,9 +70,12 @@ test.describe("Amiguis E2E Critical User Journeys", () => {
     await commentInput.fill("¡Excelente publicación, amigui!");
     await page.getByRole("button", { name: "Enviar" }).first().click();
 
-    // Verify the new comment is rendered in the post's comment list
+    // Verify the new comment is rendered in the post's comment list and count increments to 3
     await expect(
       page.getByText("¡Excelente publicación, amigui!")
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: /Comentarios \(3\)/i }).first()
     ).toBeVisible();
     expect(pageErrors).toHaveLength(0);
   });

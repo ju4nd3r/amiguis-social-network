@@ -14,8 +14,11 @@ export function PostCard({ post, currentUserId, onPostDeleted }: PostCardProps) 
   const [reactionsCount, setReactionsCount] = useState(post.reactions_count || 0);
   const [myReaction, setMyReaction] = useState<string | undefined>(post.my_reaction);
   const [showComments, setShowComments] = useState(false);
-  const [comments, setComments] = useState<Comment[]>([]);
-  const [commentsCount, setCommentsCount] = useState(post.comments_count || 0);
+  const initialComments = post.comments || [];
+  const [comments, setComments] = useState<Comment[]>(initialComments);
+  const [commentsCount, setCommentsCount] = useState(
+    initialComments.length > 0 ? initialComments.length : post.comments_count || 0
+  );
   const [commentText, setCommentText] = useState("");
   const [loadingComments, setLoadingComments] = useState(false);
 
@@ -43,16 +46,25 @@ export function PostCard({ post, currentUserId, onPostDeleted }: PostCardProps) 
   const toggleCommentsDrawer = async () => {
     const nextState = !showComments;
     setShowComments(nextState);
-    if (nextState && comments.length === 0) {
+    if (nextState) {
       setLoadingComments(true);
       try {
         const list = await api.getComments(post.id);
         if (Array.isArray(list) && list.length > 0) {
-          setComments(list);
-          setCommentsCount(list.length);
+          setComments((prev) => {
+            const existingIds = new Set(prev.map((c) => c.id));
+            const merged = [...prev];
+            for (const item of list) {
+              if (!existingIds.has(item.id)) {
+                merged.push(item);
+              }
+            }
+            setCommentsCount(merged.length);
+            return merged;
+          });
         }
       } catch {
-        setComments([]);
+        // Keep existing comments if backend is offline
       } finally {
         setLoadingComments(false);
       }
