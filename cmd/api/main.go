@@ -13,6 +13,7 @@ import (
 	"amiguis/internal/content"
 	contentDomain "amiguis/internal/content/domain"
 	"amiguis/internal/engagement"
+	engagementDomain "amiguis/internal/engagement/domain"
 	"amiguis/internal/feed"
 	"amiguis/internal/identity"
 	"amiguis/internal/media"
@@ -24,6 +25,7 @@ import (
 	"amiguis/internal/platform/logger"
 	"amiguis/internal/platform/middleware"
 	"amiguis/internal/profiles"
+	profileDomain "amiguis/internal/profiles/domain"
 	"amiguis/internal/socialgraph"
 
 	"github.com/go-chi/chi/v5"
@@ -74,6 +76,11 @@ func main() {
 	notifMod := notifications.NewModule(db, profileMod.Repo, eventBus)
 	mediaMod := media.NewModule(cfg.StorageDir, cfg.StorageURL)
 	moderationMod := moderation.NewModule()
+
+	// Seed demo profiles and comments in memory mode so initial post counts match actual comments
+	if db == nil {
+		seedDemoMemoryData(ctx, profileMod, engagementMod, eventBus, memoryPosts)
+	}
 
 	// Router setup
 	r := chi.NewRouter()
@@ -177,4 +184,95 @@ func respondJSON(w http.ResponseWriter, status int, data any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(data)
+}
+
+func seedDemoMemoryData(
+	ctx context.Context,
+	profileMod *profiles.Module,
+	engagementMod *engagement.Module,
+	eventBus events.Bus,
+	memoryPosts map[string]*contentDomain.Post,
+) {
+	now := time.Now().UTC()
+
+	demoProfiles := []*profileDomain.Profile{
+		{
+			UserID:      "u-1",
+			Username:    "camila_medallo",
+			DisplayName: "Camila Restrepo",
+			City:        "Medellín",
+			CreatedAt:   now.Add(-24 * time.Hour),
+			UpdatedAt:   now.Add(-24 * time.Hour),
+		},
+		{
+			UserID:      "u-2",
+			Username:    "mateo_bogota",
+			DisplayName: "Mateo Gómez",
+			City:        "Bogotá",
+			CreatedAt:   now.Add(-24 * time.Hour),
+			UpdatedAt:   now.Add(-24 * time.Hour),
+		},
+		{
+			UserID:      "u-3",
+			Username:    "valeria_cali",
+			DisplayName: "Valeria Caicedo",
+			City:        "Cali",
+			CreatedAt:   now.Add(-24 * time.Hour),
+			UpdatedAt:   now.Add(-24 * time.Hour),
+		},
+	}
+
+	for _, p := range demoProfiles {
+		_ = profileMod.Repo.Save(ctx, p)
+	}
+
+	demoComments := []*engagementDomain.Comment{
+		{
+			ID:        "c-demo-1",
+			PostID:    "demo-1",
+			AuthorID:  "u-2",
+			Body:      "¡Totalmente de acuerdo, Cami! Qué bacano tener un espacio tranquilo para compartir con los amiguis.",
+			CreatedAt: now.Add(-15 * time.Minute),
+		},
+		{
+			ID:        "c-demo-2",
+			PostID:    "demo-1",
+			AuthorID:  "u-3",
+			Body:      "¡Un abrazo desde Cali, amigui! Aquí estamos firmes.",
+			CreatedAt: now.Add(-10 * time.Minute),
+		},
+		{
+			ID:        "c-demo-3",
+			PostID:    "demo-2",
+			AuthorID:  "u-1",
+			Body:      "¡Me apunto de una, Mateo! Allá nos vemos con un buen tinto.",
+			CreatedAt: now.Add(-30 * time.Minute),
+		},
+	}
+
+	for _, c := range demoComments {
+		_ = engagementMod.Repo.AddComment(ctx, c)
+	}
+
+	// Keep in-memory post comment/reaction counters in sync when events fire
+	eventBus.Subscribe(events.EventCommentAdded, func(_ context.Context, evt events.Event) error {
+		if payload, ok := evt.Payload.(map[string]any); ok {
+			if postID, ok := payload["post_id"].(string); ok {
+				if post, exists := memoryPosts[postID]; exists {
+					post.CommentsCount++
+				}
+			}
+		}
+		return nil
+	})
+	eventBus.Subscribe(events.EventReactionAdded, func(_ context.Context, evt events.Event) error {
+		if payload, ok := evt.Payload.(map[string]any); ok {
+			if postID, ok := payload["post_id"].(string); ok {
+				if post, exists := memoryPosts[postID]; exists {
+					post.ReactionsCount++
+				}
+			}
+		}
+		return nil
+	})
 }
