@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"amiguis/internal/catalog"
 	"amiguis/internal/content"
 	contentDomain "amiguis/internal/content/domain"
 	"amiguis/internal/engagement"
@@ -76,6 +77,7 @@ func main() {
 	notifMod := notifications.NewModule(db, profileMod.Repo, eventBus)
 	mediaMod := media.NewModule(cfg.StorageDir, cfg.StorageURL)
 	moderationMod := moderation.NewModule()
+	catalogMod := catalog.NewModule(contentMod.Service)
 
 	// Seed demo profiles and comments in memory mode so initial post counts match actual comments
 	if db == nil {
@@ -143,6 +145,7 @@ func main() {
 		notifMod.Handler.RegisterRoutes(v1, authMW)
 		mediaMod.Handler.RegisterRoutes(v1, authMW)
 		moderationMod.Handler.RegisterRoutes(v1, authMW)
+		catalogMod.Handler.RegisterRoutes(v1, optAuthMW)
 	})
 
 	// Server and Graceful Shutdown

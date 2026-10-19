@@ -28,6 +28,7 @@ type CreatePostInput struct {
 	Type     domain.PostType
 	Body     string
 	Media    []domain.PostMedia
+	Review   *domain.ReviewMetadata
 }
 
 type PostDTO struct {
@@ -36,6 +37,7 @@ type PostDTO struct {
 	Type           domain.PostType        `json:"type"`
 	Body           string                 `json:"body"`
 	Media          []domain.PostMedia     `json:"media"`
+	Review         *domain.ReviewMetadata `json:"review,omitempty"`
 	ReactionsCount int                    `json:"reactions_count"`
 	CommentsCount  int                    `json:"comments_count"`
 	MyReaction     *string                `json:"my_reaction"`
@@ -62,6 +64,7 @@ func (s *ContentService) CreatePost(ctx context.Context, in CreatePostInput) (*P
 	if err != nil {
 		return nil, err
 	}
+	post.Review = in.Review
 
 	if err := s.repo.Create(ctx, post); err != nil {
 		return nil, err
@@ -91,6 +94,7 @@ func (s *ContentService) CreatePost(ctx context.Context, in CreatePostInput) (*P
 		Type:           post.Type,
 		Body:           post.Body,
 		Media:          post.Media,
+		Review:         post.Review,
 		ReactionsCount: 0,
 		CommentsCount:  0,
 		CreatedAt:      post.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
@@ -119,6 +123,7 @@ func (s *ContentService) GetPost(ctx context.Context, id, viewerID string) (*Pos
 		Type:           post.Type,
 		Body:           post.Body,
 		Media:          post.Media,
+		Review:         post.Review,
 		ReactionsCount: post.ReactionsCount,
 		CommentsCount:  post.CommentsCount,
 		MyReaction:     post.MyReaction,
@@ -149,6 +154,7 @@ func (s *ContentService) ListAuthorPosts(ctx context.Context, authorID, cursor s
 			Type:           p.Type,
 			Body:           p.Body,
 			Media:          p.Media,
+			Review:         p.Review,
 			ReactionsCount: p.ReactionsCount,
 			CommentsCount:  p.CommentsCount,
 			MyReaction:     p.MyReaction,

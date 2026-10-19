@@ -31,15 +31,16 @@ type ProfileFetcher interface {
 }
 
 type PostDTO struct {
-	ID             string                 `json:"id"`
-	Author         *profileDomain.Profile `json:"author"`
-	Type           contentDomain.PostType `json:"type"`
-	Body           string                 `json:"body"`
-	Media          []contentDomain.PostMedia `json:"media"`
-	ReactionsCount int                    `json:"reactions_count"`
-	CommentsCount  int                    `json:"comments_count"`
-	MyReaction     *string                `json:"my_reaction"`
-	CreatedAt      string                 `json:"created_at"`
+	ID             string                       `json:"id"`
+	Author         *profileDomain.Profile       `json:"author"`
+	Type           contentDomain.PostType       `json:"type"`
+	Body           string                       `json:"body"`
+	Media          []contentDomain.PostMedia    `json:"media"`
+	Review         *contentDomain.ReviewMetadata `json:"review,omitempty"`
+	ReactionsCount int                          `json:"reactions_count"`
+	CommentsCount  int                          `json:"comments_count"`
+	MyReaction     *string                      `json:"my_reaction"`
+	CreatedAt      string                       `json:"created_at"`
 }
 
 type FeedResponseDTO struct {
@@ -122,6 +123,7 @@ func (s *FeedService) GetFeed(ctx context.Context, viewerID string, filter domai
 			Type:           p.Type,
 			Body:           p.Body,
 			Media:          p.Media,
+			Review:         p.Review,
 			ReactionsCount: p.ReactionsCount,
 			CommentsCount:  p.CommentsCount,
 			MyReaction:     p.MyReaction,

@@ -96,6 +96,38 @@ const DEMO_POSTS: Post[] = [
     ],
     created_at: new Date(Date.now() - 1000 * 60 * 45).toISOString(),
   },
+  {
+    id: "demo-review-1",
+    author: {
+      id: "u-3",
+      username: "sofia_cali",
+      display_name: "Sofía Gómez",
+      city: "Cali",
+      followers_count: 64,
+      following_count: 72,
+      posts_count: 5,
+      created_at: new Date().toISOString(),
+    },
+    type: "review",
+    body: "Una joya absoluta del cine colombiano. La fotografía en el Amazonas y la historia de Karamakate son inolvidables.",
+    review: {
+      item_id: "cat-movie-1",
+      category: "movie",
+      item_title: "El abrazo de la serpiente",
+      item_year: 2015,
+      poster_url:
+        "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=600&q=80",
+      rating: 5,
+      watched: true,
+      liked: true,
+      creator: "Ciro Guerra",
+      producer: "Ciudad Lunar Producciones (Christina Gallego)",
+    },
+    reactions_count: 14,
+    comments_count: 0,
+    comments: [],
+    created_at: new Date(Date.now() - 1000 * 60 * 60).toISOString(),
+  },
 ];
 
 export default function FeedPage() {
@@ -105,34 +137,66 @@ export default function FeedPage() {
   const [loading, setLoading] = useState(true);
   const [nextCursor, setNextCursor] = useState<string | undefined>(undefined);
 
+  const buildVisibleTimeline = useCallback(
+    (sourcePosts: Post[]) => {
+      const localPosts = api.getLocalPosts();
+      const followingIds = new Set(api.getFollowingIds());
+      let activeUserId = currentUser?.id;
+      if (!activeUserId && typeof window !== "undefined") {
+        try {
+          const raw = localStorage.getItem("amiguis_user");
+          if (raw) activeUserId = JSON.parse(raw).id;
+        } catch {}
+      }
+
+      const seen = new Set<string>();
+      const merged: Post[] = [];
+      for (const p of [...localPosts, ...sourcePosts]) {
+        if (!seen.has(p.id)) {
+          seen.add(p.id);
+          merged.push(p);
+        }
+      }
+
+      return merged.filter((p) => {
+        const authorId = p.author?.id || "";
+        const isAllowedAuthor =
+          followingIds.has(authorId) ||
+          authorId === activeUserId ||
+          authorId === "local-user" ||
+          authorId === "guest-amigui";
+        if (!isAllowedAuthor) return false;
+        if (filterType !== "all" && p.type !== filterType) return false;
+        return true;
+      });
+    },
+    [currentUser?.id, filterType]
+  );
+
   const fetchFeed = useCallback(
     async (cursor = "", append = false) => {
       setLoading(true);
       try {
         const res = await api.getFeed(cursor, filterType);
         if (res.items && res.items.length > 0) {
-          setPosts((prev) => (append ? [...prev, ...res.items] : res.items));
+          const combined = buildVisibleTimeline([
+            ...res.items,
+            ...DEMO_POSTS,
+          ]);
+          setPosts((prev) => (append ? [...prev, ...res.items] : combined));
           setNextCursor(res.next_cursor);
         } else if (!append) {
-          setPosts(
-            DEMO_POSTS.filter(
-              (p) => filterType === "all" || p.type === filterType
-            )
-          );
+          setPosts(buildVisibleTimeline(DEMO_POSTS));
         }
       } catch {
         if (!append) {
-          setPosts(
-            DEMO_POSTS.filter(
-              (p) => filterType === "all" || p.type === filterType
-            )
-          );
+          setPosts(buildVisibleTimeline(DEMO_POSTS));
         }
       } finally {
         setLoading(false);
       }
     },
-    [filterType]
+    [filterType, buildVisibleTimeline]
   );
 
   useEffect(() => {
@@ -152,6 +216,7 @@ export default function FeedPage() {
     };
     syncUser();
     window.addEventListener("amiguis:auth-change", syncUser);
+    window.addEventListener("amiguis:follow-change", () => fetchFeed());
     fetchFeed();
     return () => {
       window.removeEventListener("amiguis:auth-change", syncUser);
@@ -159,7 +224,8 @@ export default function FeedPage() {
   }, [fetchFeed]);
 
   const handlePostCreated = (newPost: Post) => {
-    setPosts((prev) => [newPost, ...prev]);
+    api.saveLocalPost(newPost);
+    setPosts((prev) => [newPost, ...prev.filter((p) => p.id !== newPost.id)]);
   };
 
   const handlePostDeleted = (postId: string) => {
@@ -188,6 +254,27 @@ export default function FeedPage() {
           </div>
         )}
 
+        {/* Quick Catalog & Reviews Banner */}
+        <Link
+          href="/catalog"
+          data-testid="open-catalog-shortcut"
+          className="block bg-white dark:bg-[#1E2229] border border-gray-200 dark:border-gray-800 hover:border-[#FCD116] rounded-2xl p-3.5 mb-4 shadow-sm transition-all"
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <span className="text-xs font-extrabold text-gray-900 dark:text-white block">
+                🎬📚 Buscar películas, series y libros
+              </span>
+              <span className="text-[11px] text-gray-500 dark:text-gray-400">
+                Marca como vista/visto, califica de 1 a 5 estrellas y publica tu reseña
+              </span>
+            </div>
+            <span className="px-3 py-1.5 rounded-xl bg-[#FCD116] text-[#121417] text-xs font-extrabold shrink-0">
+              Explorar
+            </span>
+          </div>
+        </Link>
+
         <CreatePost onPostCreated={handlePostCreated} />
 
         {/* Feed Timeline */}
@@ -211,6 +298,7 @@ export default function FeedPage() {
               post={post}
               currentUserId={currentUser?.id}
               onPostDeleted={handlePostDeleted}
+              onReviewCreated={handlePostCreated}
             />
           ))
         )}

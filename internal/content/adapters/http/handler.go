@@ -35,10 +35,11 @@ func (h *ContentHandler) RegisterRoutes(r chi.Router, authMiddleware func(http.H
 }
 
 type createPostRequest struct {
-	Type     string             `json:"type"`
-	Body     string             `json:"body"`
-	MediaIDs []string           `json:"media_ids"`
-	Media    []domain.PostMedia `json:"media"`
+	Type     string                 `json:"type"`
+	Body     string                 `json:"body"`
+	MediaIDs []string               `json:"media_ids"`
+	Media    []domain.PostMedia     `json:"media"`
+	Review   *domain.ReviewMetadata `json:"review,omitempty"`
 }
 
 func (h *ContentHandler) CreatePost(w http.ResponseWriter, r *http.Request) {
@@ -58,6 +59,7 @@ func (h *ContentHandler) CreatePost(w http.ResponseWriter, r *http.Request) {
 		Type:     domain.PostType(req.Type),
 		Body:     req.Body,
 		Media:    req.Media,
+		Review:   req.Review,
 	})
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "VALIDATION_ERROR", err.Error())
