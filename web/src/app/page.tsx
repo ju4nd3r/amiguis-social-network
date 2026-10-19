@@ -5,7 +5,6 @@ import { api, Post, User } from "@/api/client";
 import { FilterBar } from "@/components/FilterBar";
 import { CreatePost } from "@/components/CreatePost";
 import { PostCard } from "@/components/PostCard";
-import { RefreshCw, Sparkles } from "lucide-react";
 import Link from "next/link";
 
 const DEMO_POSTS: Post[] = [
@@ -22,9 +21,9 @@ const DEMO_POSTS: Post[] = [
       created_at: new Date().toISOString(),
     },
     type: "text",
-    body: "¡Qué chimba tener una red social donde veo las publicaciones de mis amigos en orden real y sin publicidad! 🇨🇴☕ #Amiguis #SinAlgoritmo",
+    body: "¡Qué alegría tener un espacio tranquilo para compartir con mis amiguis de verdad! 🇨🇴☕ #Amiguis",
     reactions_count: 24,
-    comments_count: 3,
+    comments_count: 2,
     created_at: new Date(Date.now() - 1000 * 60 * 15).toISOString(),
   },
   {
@@ -40,7 +39,7 @@ const DEMO_POSTS: Post[] = [
       created_at: new Date().toISOString(),
     },
     type: "text",
-    body: "Tarde fría en Chapinero con un buen tinto de origen huilense. Recuerden que aquí nuestros datos están protegidos bajo la Ley 1581 de Habeas Data.",
+    body: "Tarde fría en Chapinero con un buen tinto de origen huilense. ¡Un saludo para todos mis amiguis!",
     reactions_count: 18,
     comments_count: 1,
     created_at: new Date(Date.now() - 1000 * 60 * 45).toISOString(),
@@ -106,37 +105,16 @@ export default function FeedPage() {
 
   return (
     <div>
-      {/* Manifesto Banner */}
-      <div className="bg-gradient-to-r from-[#003893]/40 via-[#1E2229] to-[#CE1126]/30 px-4 py-3 border-b border-gray-800 flex items-center justify-between">
-        <div className="flex items-center space-x-2">
-          <Sparkles className="w-4 h-4 text-[#FCD116] shrink-0" />
-          <p className="text-xs text-gray-300">
-            <strong>Sin algoritmos ni anuncios.</strong> Orden 100% cronológico:{" "}
-            <code className="text-[#FCD116]">created_at DESC</code>
-          </p>
-        </div>
-        <button
-          onClick={() => fetchFeed()}
-          className="p-1.5 text-gray-400 hover:text-white rounded-lg"
-          title="Actualizar feed"
-        >
-          <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
-        </button>
-      </div>
-
       {/* User-Controlled Filter Bar */}
       <FilterBar currentType={filterType} onSelectType={setFilterType} />
 
       <div className="p-4">
         {!currentUser && (
-          <div className="bg-[#1E2229] border border-[#FCD116]/30 rounded-2xl p-4 mb-4 flex items-center justify-between">
+          <div className="bg-white dark:bg-[#1E2229] border border-gray-200 dark:border-[#FCD116]/30 rounded-2xl p-4 mb-4 flex items-center justify-between shadow-sm transition-colors">
             <div>
-              <h2 className="text-sm font-bold text-white">
+              <h2 className="text-sm font-bold text-gray-900 dark:text-white">
                 ¡Bienvenido a Amiguis! 🇨🇴
               </h2>
-              <p className="text-xs text-gray-400 mt-0.5">
-                Únete para publicar, seguir parceros y armar tus círculos.
-              </p>
             </div>
             <Link
               href="/login"
@@ -155,7 +133,7 @@ export default function FeedPage() {
             {[1, 2].map((n) => (
               <div
                 key={n}
-                className="bg-[#1E2229] border border-gray-800 rounded-2xl p-4 h-36 animate-pulse"
+                className="bg-white dark:bg-[#1E2229] border border-gray-200 dark:border-gray-800 rounded-2xl p-4 h-36 animate-pulse"
               />
             ))}
           </div>
@@ -177,9 +155,9 @@ export default function FeedPage() {
         {nextCursor && (
           <button
             onClick={() => fetchFeed(nextCursor, true)}
-            className="w-full touch-target py-3 bg-gray-800 hover:bg-gray-700 text-xs font-semibold text-gray-200 rounded-xl mt-2"
+            className="w-full touch-target py-3 bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 text-xs font-semibold text-gray-800 dark:text-gray-200 rounded-xl mt-2 transition-colors"
           >
-            Cargar más publicaciones antiguas
+            Ver más publicaciones
           </button>
         )}
       </div>

@@ -8,11 +8,11 @@ export default function CreatePage() {
 
   return (
     <div className="p-4">
-      <h1 className="text-lg font-extrabold text-white mb-2">
+      <h1 className="text-lg font-extrabold text-gray-900 dark:text-white mb-2">
         Nueva publicación 🇨🇴
       </h1>
-      <p className="text-xs text-gray-400 mb-4">
-        Tus seguidores la verán exactamente en el orden en que la publiques, sin algoritmos intermedios.
+      <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+        Comparte una idea, foto o video con tus amiguis.
       </p>
       <CreatePost onPostCreated={() => router.push("/")} />
     </div>
